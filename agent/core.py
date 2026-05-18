@@ -160,7 +160,22 @@ class _GroqAgent:
                 _emit(progress_callback, "complete", "Investigation complete. Generating report...")
                 return (msg.content or "").strip(), investigation_steps
 
-            messages.append(msg)
+            # Serialize assistant message explicitly (avoids SDK object issues)
+            messages.append({
+                "role": "assistant",
+                "content": msg.content,
+                "tool_calls": [
+                    {
+                        "id": tc.id,
+                        "type": "function",
+                        "function": {
+                            "name": tc.function.name,
+                            "arguments": tc.function.arguments,
+                        },
+                    }
+                    for tc in msg.tool_calls
+                ],
+            })
 
             for tc in msg.tool_calls:
                 tool_name  = tc.function.name
@@ -170,7 +185,7 @@ class _GroqAgent:
                 messages.append({
                     "role":         "tool",
                     "tool_call_id": tc.id,
-                    "content":      result_str,
+                    "content":      result_str[:1000],  # truncate to stay within TPM limits
                 })
 
         return _timeout_report(target), investigation_steps
