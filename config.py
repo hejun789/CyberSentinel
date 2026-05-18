@@ -7,18 +7,22 @@ def _load_key(env_var: str) -> str | None:
     val = os.getenv(env_var, "")
     return val if (val and not val.startswith("YOUR_") and len(val) > 10) else None
 
-ANTHROPIC_API_KEY  = _load_key("ANTHROPIC_API_KEY")
-GROQ_API_KEY       = _load_key("GROQ_API_KEY")
-GEMINI_API_KEY     = _load_key("GEMINI_API_KEY")
-VIRUSTOTAL_API_KEY = _load_key("VIRUSTOTAL_API_KEY")
+ANTHROPIC_API_KEY   = _load_key("ANTHROPIC_API_KEY")
+GROQ_API_KEY        = _load_key("GROQ_API_KEY")
+OPENROUTER_API_KEY  = _load_key("OPENROUTER_API_KEY")
+GEMINI_API_KEY      = _load_key("GEMINI_API_KEY")
+VIRUSTOTAL_API_KEY  = _load_key("VIRUSTOTAL_API_KEY")
 
-# Provider selection priority: Anthropic > Groq > Gemini
+# Provider selection priority: Anthropic > Groq > OpenRouter > Gemini
 if ANTHROPIC_API_KEY:
     PROVIDER = "anthropic"
     MODEL_ID  = "claude-sonnet-4-6"
 elif GROQ_API_KEY:
     PROVIDER = "groq"
     MODEL_ID  = "llama-3.1-8b-instant"
+elif OPENROUTER_API_KEY:
+    PROVIDER = "openrouter"
+    MODEL_ID  = "meta-llama/llama-3.1-8b-instruct:free"
 elif GEMINI_API_KEY:
     PROVIDER = "gemini"
     MODEL_ID  = "gemini-2.0-flash-lite"

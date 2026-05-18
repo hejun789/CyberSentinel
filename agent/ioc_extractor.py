@@ -2,7 +2,7 @@
 
 import json
 
-from config import PROVIDER, MODEL_ID, GEMINI_API_KEY, ANTHROPIC_API_KEY, GROQ_API_KEY
+from config import PROVIDER, MODEL_ID, GEMINI_API_KEY, ANTHROPIC_API_KEY, GROQ_API_KEY, OPENROUTER_API_KEY
 
 _IOC_KEYS = (
     "malicious_ips",
@@ -64,6 +64,9 @@ def extract_iocs(report_text: str, steps: list) -> dict:
             return _extract_anthropic(prompt)
         if PROVIDER == "groq":
             return _extract_groq(prompt)
+        if PROVIDER == "openrouter":
+            return _extract_groq(prompt, api_key=OPENROUTER_API_KEY,
+                                  base_url="https://openrouter.ai/api/v1")
         if PROVIDER == "gemini":
             return _extract_gemini(prompt)
     except Exception:
@@ -87,9 +90,12 @@ def _extract_anthropic(prompt: str) -> dict:
     return _normalize(_parse_json(text))
 
 
-def _extract_groq(prompt: str) -> dict:
+def _extract_groq(prompt: str, api_key: str = None, base_url: str = None) -> dict:
     from groq import Groq
-    client = Groq(api_key=GROQ_API_KEY)
+    kwargs = {"api_key": api_key or GROQ_API_KEY}
+    if base_url:
+        kwargs["base_url"] = base_url
+    client = Groq(**kwargs)
     response = client.chat.completions.create(
         model=MODEL_ID,
         max_tokens=1024,

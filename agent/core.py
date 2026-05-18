@@ -12,7 +12,7 @@ from datetime import datetime, timezone
 from typing import Callable, Optional
 
 from config import (
-    ANTHROPIC_API_KEY, GROQ_API_KEY, GEMINI_API_KEY,
+    ANTHROPIC_API_KEY, GROQ_API_KEY, OPENROUTER_API_KEY, GEMINI_API_KEY,
     PROVIDER, MODEL_ID, MAX_TOKENS, MAX_ITERATIONS
 )
 from agent.prompts import SYSTEM_PROMPT
@@ -29,11 +29,13 @@ def create_agent():
     if PROVIDER == "anthropic":
         return _AnthropicAgent()
     if PROVIDER == "groq":
-        return _GroqAgent()
+        return _GroqAgent(api_key=GROQ_API_KEY)
+    if PROVIDER == "openrouter":
+        return _GroqAgent(api_key=OPENROUTER_API_KEY, base_url="https://openrouter.ai/api/v1")
     if PROVIDER == "gemini":
         return _GeminiAgent()
     raise RuntimeError(
-        "No API key configured. Set GROQ_API_KEY (free) or ANTHROPIC_API_KEY in your .env file."
+        "No API key configured. Set OPENROUTER_API_KEY or GROQ_API_KEY in your .env file."
     )
 
 
@@ -110,9 +112,13 @@ class _AnthropicAgent:
 # ─────────────────────────────────────────────────────────────────────────────
 
 class _GroqAgent:
-    def __init__(self):
+    def __init__(self, api_key: str = None, base_url: str = None):
         from groq import Groq
-        self.client = Groq(api_key=GROQ_API_KEY)
+        kwargs = {"api_key": api_key or GROQ_API_KEY}
+        if base_url:
+            kwargs["base_url"] = base_url
+        self.client = Groq(**kwargs)
+        self._label = "OpenRouter" if base_url else "Groq"
         self._tools = [
             {
                 "type": "function",
@@ -140,7 +146,7 @@ class _GroqAgent:
         ]
         investigation_steps: list[dict] = []
 
-        _emit(progress_callback, "start", f"Starting Groq/Llama investigation of: {target}")
+        _emit(progress_callback, "start", f"Starting {self._label}/Llama investigation of: {target}")
 
         for iteration in range(MAX_ITERATIONS):
             _emit(progress_callback, "thinking",

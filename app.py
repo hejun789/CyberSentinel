@@ -13,7 +13,7 @@ from agent.ioc_extractor import extract_iocs, EMPTY_IOCS
 from config import (
     HISTORY_FILE, MAX_HISTORY, FLASK_DEBUG, FLASK_PORT,
     VIRUSTOTAL_API_KEY, PROVIDER, MODEL_ID,
-    ANTHROPIC_API_KEY, GROQ_API_KEY, GEMINI_API_KEY,
+    ANTHROPIC_API_KEY, GROQ_API_KEY, OPENROUTER_API_KEY, GEMINI_API_KEY,
 )
 
 app = Flask(__name__)
@@ -267,14 +267,22 @@ def _chat_with_ai(system: str, history: list, message: str) -> str:
         return _chat_anthropic(system, history, message)
     if PROVIDER == "groq":
         return _chat_groq(system, history, message)
+    if PROVIDER == "openrouter":
+        return _chat_groq(system, history, message,
+                          api_key=OPENROUTER_API_KEY,
+                          base_url="https://openrouter.ai/api/v1")
     if PROVIDER == "gemini":
         return _chat_gemini(system, history, message)
     raise RuntimeError("No provider")
 
 
-def _chat_groq(system: str, history: list, message: str) -> str:
+def _chat_groq(system: str, history: list, message: str,
+               api_key: str = None, base_url: str = None) -> str:
     from groq import Groq
-    client = Groq(api_key=GROQ_API_KEY)
+    kwargs = {"api_key": api_key or GROQ_API_KEY}
+    if base_url:
+        kwargs["base_url"] = base_url
+    client = Groq(**kwargs)
     messages = [{"role": "system", "content": system}]
     for turn in history:
         role = turn.get("role")
@@ -381,6 +389,8 @@ if __name__ == "__main__":
         ai_status = f"✓ Provider: Anthropic Claude ({MODEL_ID})"
     elif PROVIDER == "groq":
         ai_status = f"✓ Provider: Groq / Llama ({MODEL_ID}) — FREE"
+    elif PROVIDER == "openrouter":
+        ai_status = f"✓ Provider: OpenRouter / Llama ({MODEL_ID}) — FREE"
     elif PROVIDER == "gemini":
         ai_status = f"✓ Provider: Google Gemini ({MODEL_ID}) — FREE"
     else:
