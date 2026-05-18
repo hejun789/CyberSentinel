@@ -16,6 +16,7 @@ from config import (
 )
 from agent.prompts import SYSTEM_PROMPT
 from agent.tools import TOOL_SCHEMAS, execute_tool
+from agent.memory import search_memory
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -51,7 +52,10 @@ class _AnthropicAgent:
         target: str,
         progress_callback: Optional[Callable[[dict], None]] = None
     ) -> tuple[str, list[dict]]:
-        messages = [{"role": "user", "content": _user_prompt(target)}]
+        memory_ctx = search_memory(target)
+        if memory_ctx:
+            _emit(progress_callback, "memory", f"🧠 Memory activated — related past investigations found")
+        messages = [{"role": "user", "content": _user_prompt(target, memory_ctx)}]
         investigation_steps: list[dict] = []
 
         _emit(progress_callback, "start", f"Starting Claude investigation of: {target}")
@@ -154,9 +158,13 @@ class _GeminiAgent:
         chat  = self._client.chats.create(model=MODEL_ID, config=self._chat_config)
         investigation_steps: list[dict] = []
 
+        memory_ctx = search_memory(target)
+        if memory_ctx:
+            _emit(progress_callback, "memory", f"🧠 Memory activated — related past investigations found")
+
         _emit(progress_callback, "start", f"Starting Gemini investigation of: {target}")
 
-        response = chat.send_message(_user_prompt(target))
+        response = chat.send_message(_user_prompt(target, memory_ctx))
 
         for iteration in range(MAX_ITERATIONS):
             # Collect function calls from response parts
@@ -212,9 +220,10 @@ def _now() -> str:
     return datetime.now(timezone.utc).isoformat()
 
 
-def _user_prompt(target: str) -> str:
+def _user_prompt(target: str, memory_ctx: str = "") -> str:
+    prefix = (memory_ctx + "\n") if memory_ctx else ""
     return (
-        f"Investigate this target for cybersecurity threats and produce "
+        f"{prefix}Investigate this target for cybersecurity threats and produce "
         f"a complete threat intelligence report:\n\n{target}"
     )
 

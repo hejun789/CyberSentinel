@@ -9,6 +9,7 @@ from flask import Flask, jsonify, render_template, request, Response, stream_wit
 
 from agent.core import CyberSentinelAgent
 from agent.report import parse_report
+from agent.ioc_extractor import extract_iocs, EMPTY_IOCS
 from config import (
     HISTORY_FILE, MAX_HISTORY, FLASK_DEBUG, FLASK_PORT,
     VIRUSTOTAL_API_KEY, PROVIDER, MODEL_ID,
@@ -17,13 +18,10 @@ from config import (
 
 app = Flask(__name__)
 
-# In-memory store of active investigation queues {inv_id: Queue}
 _active_investigations: dict[str, queue.Queue] = {}
 _inv_lock = threading.Lock()
 
-# ─────────────────────────────────────────────────────────────────────────────
-# History helpers
-# ─────────────────────────────────────────────────────────────────────────────
+# ─── History helpers ──────────────────────────────────────────────────────────
 
 _history_lock = threading.Lock()
 
@@ -48,9 +46,15 @@ def _save_history_entry(entry: dict) -> None:
             json.dump(history, f, indent=2, ensure_ascii=False)
 
 
-# ─────────────────────────────────────────────────────────────────────────────
-# Routes
-# ─────────────────────────────────────────────────────────────────────────────
+def _get_investigation(inv_id: str) -> dict | None:
+    """Return the full history entry for a given ID, or None if not found."""
+    for entry in _load_history():
+        if entry.get("id") == inv_id:
+            return entry
+    return None
+
+
+# ─── Routes ───────────────────────────────────────────────────────────────────
 
 @app.route("/")
 def index():
@@ -59,7 +63,6 @@ def index():
 
 @app.route("/api/investigate", methods=["POST"])
 def start_investigation():
-    """Start an investigation and return an investigation ID immediately."""
     if not PROVIDER:
         return jsonify({
             "error": (
@@ -93,7 +96,11 @@ def start_investigation():
             report_text, steps = agent.investigate(target, _progress)
             parsed = parse_report(report_text)
 
-            # Save to history (lightweight entry)
+            # Extract IOCs with a separate AI call
+            _progress({"type": "ioc", "message": "🔎 Extracting Indicators of Compromise...",
+                        "timestamp": datetime.now(timezone.utc).isoformat()})
+            iocs = extract_iocs(report_text, steps)
+
             _save_history_entry({
                 "id": inv_id,
                 "target": target,
@@ -102,6 +109,8 @@ def start_investigation():
                 "executive_summary": parsed["executive_summary"][:200],
                 "timestamp": datetime.now(timezone.utc).isoformat(),
                 "step_count": len(steps),
+                "raw_report": report_text,
+                "iocs": iocs,
             })
 
             q.put({
@@ -111,23 +120,18 @@ def start_investigation():
                     "target": target,
                     "report": parsed,
                     "steps": steps,
+                    "iocs": iocs,
                 }
             })
         except Exception as exc:
             q.put({"type": "error", "data": {"message": str(exc)}})
-        finally:
-            # Keep the queue alive for a short while so the SSE stream can drain
-            pass
 
-    thread = threading.Thread(target=_run, daemon=True)
-    thread.start()
-
+    threading.Thread(target=_run, daemon=True).start()
     return jsonify({"id": inv_id})
 
 
 @app.route("/api/stream/<inv_id>")
 def stream_investigation(inv_id: str):
-    """SSE endpoint — streams agent progress events for an investigation."""
     with _inv_lock:
         q = _active_investigations.get(inv_id)
 
@@ -140,7 +144,6 @@ def stream_investigation(inv_id: str):
                 try:
                     event = q.get(timeout=180)
                 except queue.Empty:
-                    # Heartbeat to keep connection alive
                     yield f"data: {json.dumps({'type': 'heartbeat'})}\n\n"
                     continue
 
@@ -163,21 +166,129 @@ def stream_investigation(inv_id: str):
     )
 
 
+@app.route("/api/chat", methods=["POST"])
+def chat():
+    """Answer questions about a completed investigation using the AI."""
+    if not PROVIDER:
+        return jsonify({"error": "No AI provider configured"}), 503
+
+    data = request.get_json(silent=True) or {}
+    inv_id  = (data.get("investigation_id") or "").strip()
+    message = (data.get("message") or "").strip()
+    history = data.get("history") or []
+
+    if not message:
+        return jsonify({"error": "No message provided"}), 400
+
+    entry = _get_investigation(inv_id) if inv_id else None
+    raw_report = (entry or {}).get("raw_report", "")
+    iocs = (entry or {}).get("iocs") or {}
+
+    # Build chat system prompt with report context
+    ioc_summary = _format_iocs_for_prompt(iocs)
+    system = (
+        "You are CyberSentinel, an expert cybersecurity AI analyst. "
+        "The user is asking follow-up questions about a specific threat investigation you conducted.\n\n"
+        + (f"INVESTIGATION REPORT:\n{raw_report[:4000]}\n\n" if raw_report else "")
+        + (f"KEY IOCs EXTRACTED:\n{ioc_summary}\n\n" if ioc_summary else "")
+        + "Answer concisely and technically. Do not re-investigate; use only information from the report above."
+    )
+
+    try:
+        reply = _chat_with_ai(system, history, message)
+        return jsonify({"reply": reply})
+    except Exception as exc:
+        return jsonify({"error": str(exc)}), 500
+
+
+def _format_iocs_for_prompt(iocs: dict) -> str:
+    if not iocs:
+        return ""
+    parts = []
+    for key, vals in iocs.items():
+        if vals:
+            parts.append(f"{key}: {', '.join(str(v) for v in vals[:10])}")
+    return "\n".join(parts)
+
+
+def _chat_with_ai(system: str, history: list, message: str) -> str:
+    if PROVIDER == "anthropic":
+        return _chat_anthropic(system, history, message)
+    if PROVIDER == "gemini":
+        return _chat_gemini(system, history, message)
+    raise RuntimeError("No provider")
+
+
+def _chat_anthropic(system: str, history: list, message: str) -> str:
+    from anthropic import Anthropic
+    client = Anthropic(api_key=ANTHROPIC_API_KEY)
+
+    messages = []
+    for turn in history:
+        role = turn.get("role")
+        content = turn.get("content", "")
+        if role in ("user", "assistant") and content:
+            messages.append({"role": role, "content": content})
+    messages.append({"role": "user", "content": message})
+
+    response = client.messages.create(
+        model=MODEL_ID,
+        max_tokens=1024,
+        system=system,
+        messages=messages,
+    )
+    return response.content[0].text.strip()
+
+
+def _chat_gemini(system: str, history: list, message: str) -> str:
+    from google import genai
+    from google.genai import types
+
+    client = genai.Client(api_key=GEMINI_API_KEY)
+    chat_history = []
+    for turn in history:
+        role = turn.get("role")
+        content = turn.get("content", "")
+        if role == "user" and content:
+            chat_history.append(types.Content(role="user", parts=[types.Part(text=content)]))
+        elif role == "assistant" and content:
+            chat_history.append(types.Content(role="model", parts=[types.Part(text=content)]))
+
+    chat = client.chats.create(
+        model=MODEL_ID,
+        config=types.GenerateContentConfig(system_instruction=system),
+        history=chat_history,
+    )
+    response = chat.send_message(message)
+    return response.text.strip()
+
+
 @app.route("/api/history")
 def get_history():
-    """Return past investigation summaries."""
     history = _load_history()
-    return jsonify({"history": history, "count": len(history)})
+    # Strip raw_report from list view to keep response small
+    slim = [
+        {k: v for k, v in h.items() if k != "raw_report"}
+        for h in history
+    ]
+    return jsonify({"history": slim, "count": len(slim)})
 
 
 @app.route("/api/history", methods=["DELETE"])
 def clear_history():
-    """Clear all investigation history."""
     with _history_lock:
         if os.path.exists(HISTORY_FILE):
             with open(HISTORY_FILE, "w", encoding="utf-8") as f:
                 json.dump([], f)
     return jsonify({"message": "History cleared"})
+
+
+@app.route("/api/investigation/<inv_id>")
+def get_investigation_detail(inv_id: str):
+    entry = _get_investigation(inv_id)
+    if not entry:
+        return jsonify({"error": "Not found"}), 404
+    return jsonify(entry)
 
 
 @app.route("/api/health")

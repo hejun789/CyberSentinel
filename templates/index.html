@@ -9,11 +9,9 @@
   <link rel="stylesheet" href="/static/css/style.css"/>
 </head>
 <body>
-  <!-- Animated grid background -->
   <div class="grid-bg"></div>
   <div class="scanline"></div>
 
-  <!-- Header -->
   <header class="header">
     <div class="header-inner">
       <div class="logo">
@@ -72,7 +70,6 @@
           ></textarea>
         </div>
 
-        <!-- Quick examples -->
         <div class="quick-examples">
           <span class="quick-label">Quick test:</span>
           <button class="quick-btn" data-target="google.com">google.com</button>
@@ -106,14 +103,51 @@
         </div>
         <div id="progressFeed" class="progress-feed">
           <div class="feed-line boot">
-            <span class="feed-prompt">CYBERSENTINEL v1.0</span> — Autonomous Threat Intelligence Agent
+            <span class="feed-prompt">CYBERSENTINEL v2.0</span> — Autonomous Threat Intelligence Agent
           </div>
         </div>
       </div>
 
-      <!-- Report panel -->
-      <div id="reportPanel" class="report-panel hidden">
-        <!-- Filled dynamically -->
+      <!-- Report panel (filled dynamically) -->
+      <div id="reportPanel" class="report-panel hidden"></div>
+
+      <!-- IOC panel (filled dynamically) -->
+      <div id="iocPanel" class="ioc-panel glass-card hidden">
+        <div class="panel-header">
+          <span class="panel-title">◈ INDICATORS OF COMPROMISE</span>
+          <button class="btn-export" id="exportIocBtn" title="Export IOCs as JSON">⬇ EXPORT JSON</button>
+        </div>
+        <div id="iocGrid" class="ioc-grid"></div>
+      </div>
+
+      <!-- Chat panel -->
+      <div id="chatPanel" class="chat-panel glass-card hidden">
+        <div class="panel-header">
+          <span class="panel-title">◈ INTEL CHAT — Ask about this investigation</span>
+          <button class="btn-icon" id="clearChatBtn" title="Clear conversation">✕</button>
+        </div>
+
+        <!-- Suggested questions -->
+        <div id="chatSuggestions" class="chat-suggestions">
+          <span class="chat-suggest-label">Suggested:</span>
+          <button class="chat-suggest-btn" data-q="What is the overall risk and should I be concerned?">Overall risk?</button>
+          <button class="chat-suggest-btn" data-q="What specific actions should I take immediately?">Immediate actions?</button>
+          <button class="chat-suggest-btn" data-q="Explain the attack techniques used in simple terms.">Explain attack</button>
+          <button class="chat-suggest-btn" data-q="Are there any related threat actors or campaigns I should know about?">Threat actors?</button>
+          <button class="chat-suggest-btn" data-q="How confident are you in this assessment and what else should I check?">Confidence?</button>
+        </div>
+
+        <div id="chatMessages" class="chat-messages"></div>
+
+        <div class="chat-input-row">
+          <textarea
+            id="chatInput"
+            class="chat-input"
+            placeholder="Ask anything about this investigation..."
+            rows="2"
+          ></textarea>
+          <button class="btn-chat-send" id="chatSendBtn">SEND</button>
+        </div>
       </div>
 
     </section>
