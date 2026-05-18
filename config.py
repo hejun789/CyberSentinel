@@ -8,13 +8,17 @@ def _load_key(env_var: str) -> str | None:
     return val if (val and not val.startswith("YOUR_") and len(val) > 10) else None
 
 ANTHROPIC_API_KEY  = _load_key("ANTHROPIC_API_KEY")
+GROQ_API_KEY       = _load_key("GROQ_API_KEY")
 GEMINI_API_KEY     = _load_key("GEMINI_API_KEY")
 VIRUSTOTAL_API_KEY = _load_key("VIRUSTOTAL_API_KEY")
 
-# Provider selection: prefer Anthropic if both keys are set
+# Provider selection priority: Anthropic > Groq > Gemini
 if ANTHROPIC_API_KEY:
     PROVIDER = "anthropic"
     MODEL_ID  = "claude-sonnet-4-6"
+elif GROQ_API_KEY:
+    PROVIDER = "groq"
+    MODEL_ID  = "llama-3.3-70b-versatile"
 elif GEMINI_API_KEY:
     PROVIDER = "gemini"
     MODEL_ID  = "gemini-2.0-flash-lite"

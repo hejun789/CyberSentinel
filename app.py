@@ -13,7 +13,7 @@ from agent.ioc_extractor import extract_iocs, EMPTY_IOCS
 from config import (
     HISTORY_FILE, MAX_HISTORY, FLASK_DEBUG, FLASK_PORT,
     VIRUSTOTAL_API_KEY, PROVIDER, MODEL_ID,
-    ANTHROPIC_API_KEY, GEMINI_API_KEY,
+    ANTHROPIC_API_KEY, GROQ_API_KEY, GEMINI_API_KEY,
 )
 
 app = Flask(__name__)
@@ -211,6 +211,9 @@ def _sanitize_error(raw: str) -> str:
         wait = f" Retry in {m.group(1)}s." if m else ""
         return f"Rate limit reached (Gemini free tier: 20 req/day).{wait}"
 
+    if "FAILED_PRECONDITION" in msg and "location" in msg.lower():
+        return "Gemini API is not available from this server's region. Use ANTHROPIC_API_KEY instead."
+
     # Use specific phrases, not status codes that appear in unrelated content
     if "UNAUTHENTICATED" in msg or "API_KEY_INVALID" in msg or "invalid api key" in msg.lower():
         return "API authentication error — check your GEMINI_API_KEY in .env."
@@ -241,9 +244,29 @@ def _format_iocs_for_prompt(iocs: dict) -> str:
 def _chat_with_ai(system: str, history: list, message: str) -> str:
     if PROVIDER == "anthropic":
         return _chat_anthropic(system, history, message)
+    if PROVIDER == "groq":
+        return _chat_groq(system, history, message)
     if PROVIDER == "gemini":
         return _chat_gemini(system, history, message)
     raise RuntimeError("No provider")
+
+
+def _chat_groq(system: str, history: list, message: str) -> str:
+    from groq import Groq
+    client = Groq(api_key=GROQ_API_KEY)
+    messages = [{"role": "system", "content": system}]
+    for turn in history:
+        role = turn.get("role")
+        content = turn.get("content", "")
+        if role in ("user", "assistant") and content:
+            messages.append({"role": role, "content": content})
+    messages.append({"role": "user", "content": message})
+    response = client.chat.completions.create(
+        model=MODEL_ID,
+        max_tokens=1024,
+        messages=messages,
+    )
+    return response.choices[0].message.content.strip()
 
 
 def _chat_anthropic(system: str, history: list, message: str) -> str:
@@ -325,6 +348,7 @@ def health():
         "provider": PROVIDER or "none",
         "model": MODEL_ID or "not configured",
         "anthropic_key_set": bool(ANTHROPIC_API_KEY),
+        "groq_key_set": bool(GROQ_API_KEY),
         "gemini_key_set": bool(GEMINI_API_KEY),
         "virustotal_key_set": bool(VIRUSTOTAL_API_KEY),
         "ready": bool(PROVIDER),
@@ -334,10 +358,12 @@ def health():
 if __name__ == "__main__":
     if PROVIDER == "anthropic":
         ai_status = f"✓ Provider: Anthropic Claude ({MODEL_ID})"
+    elif PROVIDER == "groq":
+        ai_status = f"✓ Provider: Groq / Llama ({MODEL_ID}) — FREE"
     elif PROVIDER == "gemini":
         ai_status = f"✓ Provider: Google Gemini ({MODEL_ID}) — FREE"
     else:
-        ai_status = "✗ No AI provider — add GEMINI_API_KEY or ANTHROPIC_API_KEY to .env"
+        ai_status = "✗ No AI provider — add GROQ_API_KEY or ANTHROPIC_API_KEY to .env"
     vt_status = "✓ VirusTotal configured" if VIRUSTOTAL_API_KEY else "○ VirusTotal optional (not set)"
     print(f"""
 ╔═══════════════════════════════════════════════════════╗

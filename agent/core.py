@@ -1,9 +1,10 @@
 """
-CyberSentinel agent core — supports both Anthropic Claude and Google Gemini.
+CyberSentinel agent core — supports Anthropic Claude, Groq, and Google Gemini.
 
 Provider is selected automatically based on which API key is set in .env:
-  ANTHROPIC_API_KEY → uses Claude claude-sonnet-4-6        (paid, best quality)
-  GEMINI_API_KEY    → uses Gemini gemini-2.5-flash-lite     (free tier, 20 req/day)
+  ANTHROPIC_API_KEY → uses Claude claude-sonnet-4-6          (paid, best quality)
+  GROQ_API_KEY      → uses Llama 3.3 70B via Groq            (free, 14400 req/day)
+  GEMINI_API_KEY    → uses Gemini gemini-2.0-flash-lite       (free, limited regions)
 """
 
 import json
@@ -11,7 +12,7 @@ from datetime import datetime, timezone
 from typing import Callable, Optional
 
 from config import (
-    ANTHROPIC_API_KEY, GEMINI_API_KEY,
+    ANTHROPIC_API_KEY, GROQ_API_KEY, GEMINI_API_KEY,
     PROVIDER, MODEL_ID, MAX_TOKENS, MAX_ITERATIONS
 )
 from agent.prompts import SYSTEM_PROMPT
@@ -27,10 +28,12 @@ def create_agent():
     """Return the right agent based on which API key is configured."""
     if PROVIDER == "anthropic":
         return _AnthropicAgent()
+    if PROVIDER == "groq":
+        return _GroqAgent()
     if PROVIDER == "gemini":
         return _GeminiAgent()
     raise RuntimeError(
-        "No API key configured. Set ANTHROPIC_API_KEY or GEMINI_API_KEY in your .env file."
+        "No API key configured. Set GROQ_API_KEY (free) or ANTHROPIC_API_KEY in your .env file."
     )
 
 
@@ -98,6 +101,77 @@ class _AnthropicAgent:
                 if final:
                     return final, investigation_steps
                 break
+
+        return _timeout_report(target), investigation_steps
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Groq (Llama) implementation — OpenAI-compatible, free tier
+# ─────────────────────────────────────────────────────────────────────────────
+
+class _GroqAgent:
+    def __init__(self):
+        from groq import Groq
+        self.client = Groq(api_key=GROQ_API_KEY)
+        self._tools = [
+            {
+                "type": "function",
+                "function": {
+                    "name": s["name"],
+                    "description": s["description"],
+                    "parameters": s["input_schema"],
+                }
+            }
+            for s in TOOL_SCHEMAS
+        ]
+
+    def investigate(
+        self,
+        target: str,
+        progress_callback: Optional[Callable[[dict], None]] = None
+    ) -> tuple[str, list[dict]]:
+        memory_ctx = search_memory(target)
+        if memory_ctx:
+            _emit(progress_callback, "memory", "🧠 Memory activated — related past investigations found")
+
+        messages = [
+            {"role": "system", "content": SYSTEM_PROMPT},
+            {"role": "user",   "content": _user_prompt(target, memory_ctx)},
+        ]
+        investigation_steps: list[dict] = []
+
+        _emit(progress_callback, "start", f"Starting Groq/Llama investigation of: {target}")
+
+        for iteration in range(MAX_ITERATIONS):
+            _emit(progress_callback, "thinking",
+                  f"Analyzing results, deciding next steps... (iteration {iteration + 1})")
+
+            response = self.client.chat.completions.create(
+                model=MODEL_ID,
+                max_tokens=MAX_TOKENS,
+                messages=messages,
+                tools=self._tools,
+                tool_choice="auto",
+            )
+
+            msg = response.choices[0].message
+
+            if not msg.tool_calls:
+                _emit(progress_callback, "complete", "Investigation complete. Generating report...")
+                return (msg.content or "").strip(), investigation_steps
+
+            messages.append(msg)
+
+            for tc in msg.tool_calls:
+                tool_name  = tc.function.name
+                tool_input = json.loads(tc.function.arguments)
+                result_str, snippet = _run_tool(tool_name, tool_input, progress_callback, iteration)
+                investigation_steps.append(_step(iteration, tool_name, tool_input, result_str, snippet))
+                messages.append({
+                    "role":         "tool",
+                    "tool_call_id": tc.id,
+                    "content":      result_str,
+                })
 
         return _timeout_report(target), investigation_steps
 
