@@ -124,7 +124,7 @@ def start_investigation():
                 }
             })
         except Exception as exc:
-            q.put({"type": "error", "data": {"message": str(exc)}})
+            q.put({"type": "error", "data": {"message": _sanitize_error(str(exc))}})
 
     threading.Thread(target=_run, daemon=True).start()
     return jsonify({"id": inv_id})
@@ -198,7 +198,33 @@ def chat():
         reply = _chat_with_ai(system, history, message)
         return jsonify({"reply": reply})
     except Exception as exc:
-        return jsonify({"error": str(exc)}), 500
+        return jsonify({"error": _sanitize_error(str(exc))}), 500
+
+
+def _sanitize_error(raw: str) -> str:
+    """Convert verbose SDK exception strings into short, readable messages."""
+    import re as _re
+    msg = raw[:2000]  # cap length before pattern matching
+
+    if "429" in msg or "RESOURCE_EXHAUSTED" in msg or "quota" in msg.lower():
+        m = _re.search(r"retryDelay['\": ]+(\d+)s", msg)
+        wait = f" Retry in {m.group(1)}s." if m else ""
+        return f"Rate limit reached (Gemini free tier: 20 requests/day).{wait}"
+
+    if "401" in msg or "403" in msg or "API_KEY" in msg or "authentication" in msg.lower():
+        return "API authentication error — check your GEMINI_API_KEY in .env."
+
+    if "503" in msg or "unavailable" in msg.lower():
+        return "AI service temporarily unavailable. Please try again."
+
+    if "timeout" in msg.lower() or "timed out" in msg.lower():
+        return "Request timed out. Please try again."
+
+    # If raw message looks like a big JSON blob, give a generic message
+    if len(raw) > 200 or raw.lstrip().startswith("{") or "\\'" in raw:
+        return "AI service returned an unexpected error. Please try again."
+
+    return raw
 
 
 def _format_iocs_for_prompt(iocs: dict) -> str:

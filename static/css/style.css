@@ -847,6 +847,16 @@ html, body {
   font-size: .78rem;
 }
 
+.chat-bubble.error {
+  align-self: flex-start;
+  background: rgba(255,51,85,.08);
+  border: 1px solid rgba(255,51,85,.3);
+  color: var(--danger);
+  border-bottom-left-radius: 2px;
+  font-family: var(--font-mono);
+  font-size: .82rem;
+}
+
 .chat-bubble .bubble-role {
   font-family: var(--font-mono);
   font-size: .65rem;

@@ -486,14 +486,14 @@ async function sendChatMessage() {
     loadingEl.remove();
 
     if (data.error) {
-      appendChatBubble('assistant', `Error: ${data.error}`);
+      appendChatBubble('error', data.error);
     } else {
       appendChatBubble('assistant', data.reply);
       chatHistory.push({ role: 'assistant', content: data.reply });
     }
   } catch (err) {
     loadingEl.remove();
-    appendChatBubble('assistant', `Connection error: ${err.message}`);
+    appendChatBubble('error', `Connection error: ${err.message}`);
   } finally {
     chatSendBtn.disabled = false;
     chatInput.focus();
@@ -503,7 +503,7 @@ async function sendChatMessage() {
 function appendChatBubble(role, text) {
   const el = document.createElement('div');
   el.className = `chat-bubble ${role}`;
-  const roleLabel = role === 'user' ? 'YOU' : 'CYBERSENTINEL';
+  const roleLabel = role === 'user' ? 'YOU' : role === 'error' ? '⚠ ERROR' : 'CYBERSENTINEL';
   el.innerHTML = `<div class="bubble-role">${roleLabel}</div>${escapeHtml(text)}`;
   chatMessages.appendChild(el);
   chatMessages.scrollTop = chatMessages.scrollHeight;
