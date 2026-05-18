@@ -204,24 +204,25 @@ def chat():
 def _sanitize_error(raw: str) -> str:
     """Convert verbose SDK exception strings into short, readable messages."""
     import re as _re
-    msg = raw[:2000]  # cap length before pattern matching
+    msg = raw[:2000]
 
-    if "429" in msg or "RESOURCE_EXHAUSTED" in msg or "quota" in msg.lower():
+    if "RESOURCE_EXHAUSTED" in msg or "quota" in msg.lower():
         m = _re.search(r"retryDelay['\": ]+(\d+)s", msg)
         wait = f" Retry in {m.group(1)}s." if m else ""
-        return f"Rate limit reached (Gemini free tier: 20 requests/day).{wait}"
+        return f"Rate limit reached (Gemini free tier: 20 req/day).{wait}"
 
-    if "401" in msg or "403" in msg or "API_KEY" in msg or "authentication" in msg.lower():
+    # Use specific phrases, not status codes that appear in unrelated content
+    if "UNAUTHENTICATED" in msg or "API_KEY_INVALID" in msg or "invalid api key" in msg.lower():
         return "API authentication error — check your GEMINI_API_KEY in .env."
 
-    if "503" in msg or "unavailable" in msg.lower():
+    if "UNAVAILABLE" in msg or "Service Unavailable" in msg:
         return "AI service temporarily unavailable. Please try again."
 
-    if "timeout" in msg.lower() or "timed out" in msg.lower():
+    if "timeout" in msg.lower() or "timed out" in msg.lower() or "DeadlineExceeded" in msg:
         return "Request timed out. Please try again."
 
-    # If raw message looks like a big JSON blob, give a generic message
-    if len(raw) > 200 or raw.lstrip().startswith("{") or "\\'" in raw:
+    # Catch any other large/opaque SDK error blobs
+    if len(raw) > 200 or raw.lstrip().startswith("{"):
         return "AI service returned an unexpected error. Please try again."
 
     return raw

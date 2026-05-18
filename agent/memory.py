@@ -135,9 +135,12 @@ def _score_entry(entry: dict, target_lower: str, target_words: set) -> tuple:
         score += 6
         reasons.append(f"domain in past IOCs: {t_root}")
 
-    # Shared suspicious TLD
+    # Shared suspicious TLD — compare root domains so URLs like
+    # "http://evil.tk/path" are matched the same as plain "evil.tk"
+    t_domain = _get_root_domain(target_lower)
+    p_domain  = _get_root_domain(past_target)
     for tld in _SUSPICIOUS_TLDS:
-        if target_lower.endswith(tld) and past_target.endswith(tld):
+        if t_domain.endswith(tld) and p_domain.endswith(tld):
             score += 2
             reasons.append(f"same suspicious TLD: {tld}")
             break

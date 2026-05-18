@@ -2,8 +2,8 @@
 CyberSentinel agent core — supports both Anthropic Claude and Google Gemini.
 
 Provider is selected automatically based on which API key is set in .env:
-  ANTHROPIC_API_KEY → uses Claude claude-sonnet-4-6   (paid, best quality)
-  GEMINI_API_KEY    → uses Gemini 1.5 Flash (free tier, 1500 req/day)
+  ANTHROPIC_API_KEY → uses Claude claude-sonnet-4-6        (paid, best quality)
+  GEMINI_API_KEY    → uses Gemini gemini-2.5-flash-lite     (free tier, 20 req/day)
 """
 
 import json
