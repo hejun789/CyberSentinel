@@ -503,7 +503,10 @@ def web_search(query: str, max_results: int = 5) -> str:
     """Search DuckDuckGo for threat intelligence."""
     max_results = min(int(max_results), 10)
     try:
-        from duckduckgo_search import DDGS
+        try:
+            from ddgs import DDGS
+        except ImportError:
+            from duckduckgo_search import DDGS
         with DDGS() as ddgs:
             raw = list(ddgs.text(query, max_results=max_results))
 

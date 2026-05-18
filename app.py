@@ -9,7 +9,7 @@ from flask import Flask, jsonify, render_template, request, Response, stream_wit
 
 from agent.core import CyberSentinelAgent
 from agent.report import parse_report
-from config import HISTORY_FILE, MAX_HISTORY, FLASK_DEBUG, FLASK_PORT
+from config import HISTORY_FILE, MAX_HISTORY, FLASK_DEBUG, FLASK_PORT, VIRUSTOTAL_API_KEY
 
 app = Flask(__name__)
 
@@ -56,6 +56,13 @@ def index():
 @app.route("/api/investigate", methods=["POST"])
 def start_investigation():
     """Start an investigation and return an investigation ID immediately."""
+    from config import ANTHROPIC_API_KEY as _key
+    if not _key:
+        return jsonify({
+            "error": "ANTHROPIC_API_KEY is not configured. "
+                     "Edit your .env file and add your API key from https://console.anthropic.com"
+        }), 503
+
     data = request.get_json(silent=True) or {}
     target = (data.get("target") or "").strip()
 
@@ -179,10 +186,20 @@ def health():
 
 
 if __name__ == "__main__":
-    print("""
+    from config import ANTHROPIC_API_KEY
+    key_status = "✓ API key configured" if ANTHROPIC_API_KEY else "✗ API key MISSING — add to .env"
+    vt_status  = "✓ VirusTotal configured" if VIRUSTOTAL_API_KEY else "○ VirusTotal optional (not set)"
+    print(f"""
 ╔═══════════════════════════════════════════════════════╗
-║          CyberSentinel — Threat Intelligence Agent     ║
-║                  Starting on port {}                  ║
+║       CyberSentinel — Threat Intelligence Agent       ║
+╠═══════════════════════════════════════════════════════╣
+║  {key_status:<53}║
+║  {vt_status:<53}║
+╠═══════════════════════════════════════════════════════╣
+║  Open: http://localhost:{FLASK_PORT:<31}║
 ╚═══════════════════════════════════════════════════════╝
-    """.format(FLASK_PORT))
+    """)
+    if not ANTHROPIC_API_KEY:
+        print("  ⚠  Add your Anthropic API key to .env before investigating targets")
+        print("  Get a key at: https://console.anthropic.com\n")
     app.run(debug=FLASK_DEBUG, port=FLASK_PORT, threaded=True)

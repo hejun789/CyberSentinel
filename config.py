@@ -3,7 +3,9 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
-ANTHROPIC_API_KEY = os.getenv("ANTHROPIC_API_KEY")
+_raw_key = os.getenv("ANTHROPIC_API_KEY", "")
+# Reject placeholder values
+ANTHROPIC_API_KEY = _raw_key if (_raw_key and not _raw_key.startswith("YOUR_") and len(_raw_key) > 20) else None
 VIRUSTOTAL_API_KEY = os.getenv("VIRUSTOTAL_API_KEY")
 
 MODEL_ID = "claude-sonnet-4-6"
