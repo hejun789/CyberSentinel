@@ -9,7 +9,11 @@ from flask import Flask, jsonify, render_template, request, Response, stream_wit
 
 from agent.core import CyberSentinelAgent
 from agent.report import parse_report
-from config import HISTORY_FILE, MAX_HISTORY, FLASK_DEBUG, FLASK_PORT, VIRUSTOTAL_API_KEY
+from config import (
+    HISTORY_FILE, MAX_HISTORY, FLASK_DEBUG, FLASK_PORT,
+    VIRUSTOTAL_API_KEY, PROVIDER, MODEL_ID,
+    ANTHROPIC_API_KEY, GEMINI_API_KEY,
+)
 
 app = Flask(__name__)
 
@@ -56,11 +60,13 @@ def index():
 @app.route("/api/investigate", methods=["POST"])
 def start_investigation():
     """Start an investigation and return an investigation ID immediately."""
-    from config import ANTHROPIC_API_KEY as _key
-    if not _key:
+    if not PROVIDER:
         return jsonify({
-            "error": "ANTHROPIC_API_KEY is not configured. "
-                     "Edit your .env file and add your API key from https://console.anthropic.com"
+            "error": (
+                "No API key configured. "
+                "Add GEMINI_API_KEY (free) from https://aistudio.google.com "
+                "or ANTHROPIC_API_KEY from https://console.anthropic.com to your .env file."
+            )
         }), 503
 
     data = request.get_json(silent=True) or {}
@@ -176,30 +182,36 @@ def clear_history():
 
 @app.route("/api/health")
 def health():
-    from config import ANTHROPIC_API_KEY, VIRUSTOTAL_API_KEY
     return jsonify({
         "status": "ok",
+        "provider": PROVIDER or "none",
+        "model": MODEL_ID or "not configured",
         "anthropic_key_set": bool(ANTHROPIC_API_KEY),
+        "gemini_key_set": bool(GEMINI_API_KEY),
         "virustotal_key_set": bool(VIRUSTOTAL_API_KEY),
-        "model": "claude-sonnet-4-6",
+        "ready": bool(PROVIDER),
     })
 
 
 if __name__ == "__main__":
-    from config import ANTHROPIC_API_KEY
-    key_status = "✓ API key configured" if ANTHROPIC_API_KEY else "✗ API key MISSING — add to .env"
-    vt_status  = "✓ VirusTotal configured" if VIRUSTOTAL_API_KEY else "○ VirusTotal optional (not set)"
+    if PROVIDER == "anthropic":
+        ai_status = f"✓ Provider: Anthropic Claude ({MODEL_ID})"
+    elif PROVIDER == "gemini":
+        ai_status = f"✓ Provider: Google Gemini ({MODEL_ID}) — FREE"
+    else:
+        ai_status = "✗ No AI provider — add GEMINI_API_KEY or ANTHROPIC_API_KEY to .env"
+    vt_status = "✓ VirusTotal configured" if VIRUSTOTAL_API_KEY else "○ VirusTotal optional (not set)"
     print(f"""
 ╔═══════════════════════════════════════════════════════╗
 ║       CyberSentinel — Threat Intelligence Agent       ║
 ╠═══════════════════════════════════════════════════════╣
-║  {key_status:<53}║
+║  {ai_status:<53}║
 ║  {vt_status:<53}║
 ╠═══════════════════════════════════════════════════════╣
 ║  Open: http://localhost:{FLASK_PORT:<31}║
 ╚═══════════════════════════════════════════════════════╝
     """)
-    if not ANTHROPIC_API_KEY:
-        print("  ⚠  Add your Anthropic API key to .env before investigating targets")
-        print("  Get a key at: https://console.anthropic.com\n")
+    if not PROVIDER:
+        print("  ⚠  FREE option: get a Gemini API key at https://aistudio.google.com")
+        print("  Add GEMINI_API_KEY=your_key to the .env file, then restart.\n")
     app.run(host="0.0.0.0", debug=FLASK_DEBUG, port=FLASK_PORT, threaded=True)
