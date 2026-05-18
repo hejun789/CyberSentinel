@@ -1,0 +1,124 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>CyberSentinel — Threat Intelligence Agent</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Share+Tech+Mono&family=Orbitron:wght@400;600;800&family=Inter:wght@300;400;500&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/static/css/style.css"/>
+</head>
+<body>
+  <!-- Animated grid background -->
+  <div class="grid-bg"></div>
+  <div class="scanline"></div>
+
+  <!-- Header -->
+  <header class="header">
+    <div class="header-inner">
+      <div class="logo">
+        <svg class="logo-icon" viewBox="0 0 40 40" fill="none">
+          <polygon points="20,2 38,12 38,28 20,38 2,28 2,12" stroke="#00ff88" stroke-width="2" fill="none"/>
+          <circle cx="20" cy="20" r="6" fill="#00ff88"/>
+          <line x1="20" y1="8" x2="20" y2="14" stroke="#00ff88" stroke-width="1.5"/>
+          <line x1="20" y1="26" x2="20" y2="32" stroke="#00ff88" stroke-width="1.5"/>
+          <line x1="8" y1="15" x2="14" y2="17" stroke="#00ff88" stroke-width="1.5"/>
+          <line x1="26" y1="23" x2="32" y2="25" stroke="#00ff88" stroke-width="1.5"/>
+          <line x1="8" y1="25" x2="14" y2="23" stroke="#00ff88" stroke-width="1.5"/>
+          <line x1="26" y1="17" x2="32" y2="15" stroke="#00ff88" stroke-width="1.5"/>
+        </svg>
+        <span class="logo-text">CYBER<span class="accent">SENTINEL</span></span>
+      </div>
+      <div class="header-meta">
+        <span class="status-dot" id="statusDot"></span>
+        <span id="statusText" class="status-label">READY</span>
+        <div class="header-time" id="headerTime"></div>
+      </div>
+    </div>
+  </header>
+
+  <main class="main-layout">
+
+    <!-- Left sidebar: history -->
+    <aside class="sidebar">
+      <div class="sidebar-header">
+        <span class="panel-title">◈ INTEL HISTORY</span>
+        <button class="btn-icon" id="clearHistoryBtn" title="Clear history">✕</button>
+      </div>
+      <div id="historyList" class="history-list">
+        <div class="history-empty">No investigations yet</div>
+      </div>
+    </aside>
+
+    <!-- Center: main investigator -->
+    <section class="center-panel">
+
+      <!-- Input panel -->
+      <div class="input-panel glass-card">
+        <div class="panel-header">
+          <span class="panel-title">◈ TARGET ACQUISITION</span>
+          <div id="typeDetector" class="type-badge hidden">
+            <span id="typeIcon">?</span>
+            <span id="typeLabel">Detecting...</span>
+          </div>
+        </div>
+
+        <div class="input-area">
+          <textarea
+            id="targetInput"
+            class="target-input"
+            placeholder="Enter target to investigate:&#10;• Domain:   suspicious-site.tk&#10;• IP:        45.33.32.156&#10;• CVE:       CVE-2024-3094&#10;• URL:       http://phish-login.ml/paypal&#10;• Email:     Paste raw email with headers..."
+            rows="5"
+          ></textarea>
+        </div>
+
+        <!-- Quick examples -->
+        <div class="quick-examples">
+          <span class="quick-label">Quick test:</span>
+          <button class="quick-btn" data-target="google.com">google.com</button>
+          <button class="quick-btn" data-target="free-bitcoin-winner.tk">free-bitcoin-winner.tk</button>
+          <button class="quick-btn" data-target="CVE-2021-44228">CVE-2021-44228</button>
+          <button class="quick-btn" data-target="CVE-2024-3094">CVE-2024-3094</button>
+          <button class="quick-btn" data-target="http://secure-paypal-login.ml/account/verify?user=victim">Phish URL</button>
+          <button class="quick-btn" data-target="8.8.8.8">8.8.8.8</button>
+        </div>
+
+        <div class="input-actions">
+          <button class="btn-investigate" id="investigateBtn">
+            <span class="btn-icon-inner">⬡</span>
+            INVESTIGATE
+          </button>
+          <button class="btn-stop hidden" id="stopBtn">
+            ◼ STOP
+          </button>
+        </div>
+      </div>
+
+      <!-- Progress terminal -->
+      <div id="progressPanel" class="progress-panel glass-card hidden">
+        <div class="panel-header">
+          <span class="panel-title">◈ INVESTIGATION FEED</span>
+          <div class="terminal-controls">
+            <span class="term-dot red"></span>
+            <span class="term-dot yellow"></span>
+            <span class="term-dot green"></span>
+          </div>
+        </div>
+        <div id="progressFeed" class="progress-feed">
+          <div class="feed-line boot">
+            <span class="feed-prompt">CYBERSENTINEL v1.0</span> — Autonomous Threat Intelligence Agent
+          </div>
+        </div>
+      </div>
+
+      <!-- Report panel -->
+      <div id="reportPanel" class="report-panel hidden">
+        <!-- Filled dynamically -->
+      </div>
+
+    </section>
+  </main>
+
+  <script src="/static/js/app.js"></script>
+</body>
+</html>
