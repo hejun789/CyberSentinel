@@ -26,7 +26,7 @@ MAX_TOKENS     = 8096
 MAX_ITERATIONS = 10
 
 FLASK_DEBUG = os.getenv("FLASK_DEBUG", "false").lower() == "true"
-FLASK_PORT  = int(os.getenv("FLASK_PORT", 5000))
+FLASK_PORT  = int(os.getenv("PORT") or os.getenv("FLASK_PORT", 5000))  # PORT is set by Railway/Render
 
 HISTORY_FILE = os.path.join(os.path.dirname(__file__), "data", "history.json")
 MAX_HISTORY  = 50
