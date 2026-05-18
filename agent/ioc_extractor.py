@@ -65,8 +65,7 @@ def extract_iocs(report_text: str, steps: list) -> dict:
         if PROVIDER == "groq":
             return _extract_groq(prompt)
         if PROVIDER == "openrouter":
-            return _extract_groq(prompt, api_key=OPENROUTER_API_KEY,
-                                  base_url="https://openrouter.ai/api/v1")
+            return _extract_openrouter(prompt)
         if PROVIDER == "gemini":
             return _extract_gemini(prompt)
     except Exception:
@@ -90,12 +89,28 @@ def _extract_anthropic(prompt: str) -> dict:
     return _normalize(_parse_json(text))
 
 
-def _extract_groq(prompt: str, api_key: str = None, base_url: str = None) -> dict:
+def _extract_openrouter(prompt: str) -> dict:
+    from openai import OpenAI
+    client = OpenAI(
+        api_key=OPENROUTER_API_KEY,
+        base_url="https://openrouter.ai/api/v1",
+        default_headers={"HTTP-Referer": "https://cybersentinel-9d1d.onrender.com", "X-Title": "CyberSentinel"},
+    )
+    response = client.chat.completions.create(
+        model=MODEL_ID,
+        max_tokens=1024,
+        messages=[
+            {"role": "system", "content": _SYSTEM},
+            {"role": "user",   "content": prompt},
+        ],
+    )
+    text = response.choices[0].message.content.strip()
+    return _normalize(_parse_json(text))
+
+
+def _extract_groq(prompt: str) -> dict:
     from groq import Groq
-    kwargs = {"api_key": api_key or GROQ_API_KEY}
-    if base_url:
-        kwargs["base_url"] = base_url
-    client = Groq(**kwargs)
+    client = Groq(api_key=GROQ_API_KEY)
     response = client.chat.completions.create(
         model=MODEL_ID,
         max_tokens=1024,

@@ -29,9 +29,9 @@ def create_agent():
     if PROVIDER == "anthropic":
         return _AnthropicAgent()
     if PROVIDER == "groq":
-        return _GroqAgent(api_key=GROQ_API_KEY)
+        return _GroqAgent()
     if PROVIDER == "openrouter":
-        return _GroqAgent(api_key=OPENROUTER_API_KEY, base_url="https://openrouter.ai/api/v1")
+        return _OpenRouterAgent()
     if PROVIDER == "gemini":
         return _GeminiAgent()
     raise RuntimeError(
@@ -112,13 +112,10 @@ class _AnthropicAgent:
 # ─────────────────────────────────────────────────────────────────────────────
 
 class _GroqAgent:
-    def __init__(self, api_key: str = None, base_url: str = None):
+    def __init__(self):
         from groq import Groq
-        kwargs = {"api_key": api_key or GROQ_API_KEY}
-        if base_url:
-            kwargs["base_url"] = base_url
-        self.client = Groq(**kwargs)
-        self._label = "OpenRouter" if base_url else "Groq"
+        self.client = Groq(api_key=GROQ_API_KEY)
+        self._label = "Groq"
         self._tools = [
             {
                 "type": "function",
@@ -192,6 +189,98 @@ class _GroqAgent:
                     "role":         "tool",
                     "tool_call_id": tc.id,
                     "content":      result_str[:1000],  # truncate to stay within TPM limits
+                })
+
+        return _timeout_report(target), investigation_steps
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# OpenRouter implementation — uses openai SDK with OpenRouter base URL
+# ─────────────────────────────────────────────────────────────────────────────
+
+class _OpenRouterAgent:
+    def __init__(self):
+        from openai import OpenAI
+        self.client = OpenAI(
+            api_key=OPENROUTER_API_KEY,
+            base_url="https://openrouter.ai/api/v1",
+            default_headers={
+                "HTTP-Referer": "https://cybersentinel-9d1d.onrender.com",
+                "X-Title": "CyberSentinel",
+            },
+        )
+        self._tools = [
+            {
+                "type": "function",
+                "function": {
+                    "name": s["name"],
+                    "description": s["description"],
+                    "parameters": s["input_schema"],
+                }
+            }
+            for s in TOOL_SCHEMAS
+        ]
+
+    def investigate(
+        self,
+        target: str,
+        progress_callback: Optional[Callable[[dict], None]] = None
+    ) -> tuple[str, list[dict]]:
+        memory_ctx = search_memory(target)
+        if memory_ctx:
+            _emit(progress_callback, "memory", "🧠 Memory activated — related past investigations found")
+
+        messages = [
+            {"role": "system", "content": SYSTEM_PROMPT},
+            {"role": "user",   "content": _user_prompt(target, memory_ctx)},
+        ]
+        investigation_steps: list[dict] = []
+
+        _emit(progress_callback, "start", f"Starting OpenRouter/Llama investigation of: {target}")
+
+        for iteration in range(MAX_ITERATIONS):
+            _emit(progress_callback, "thinking",
+                  f"Analyzing results, deciding next steps... (iteration {iteration + 1})")
+
+            response = self.client.chat.completions.create(
+                model=MODEL_ID,
+                max_tokens=MAX_TOKENS,
+                messages=messages,
+                tools=self._tools,
+                tool_choice="auto",
+            )
+
+            msg = response.choices[0].message
+
+            if not msg.tool_calls:
+                _emit(progress_callback, "complete", "Investigation complete. Generating report...")
+                return (msg.content or "").strip(), investigation_steps
+
+            messages.append({
+                "role": "assistant",
+                "content": msg.content,
+                "tool_calls": [
+                    {
+                        "id": tc.id,
+                        "type": "function",
+                        "function": {
+                            "name": tc.function.name,
+                            "arguments": tc.function.arguments,
+                        },
+                    }
+                    for tc in msg.tool_calls
+                ],
+            })
+
+            for tc in msg.tool_calls:
+                tool_name  = tc.function.name
+                tool_input = json.loads(tc.function.arguments)
+                result_str, snippet = _run_tool(tool_name, tool_input, progress_callback, iteration)
+                investigation_steps.append(_step(iteration, tool_name, tool_input, result_str, snippet))
+                messages.append({
+                    "role":         "tool",
+                    "tool_call_id": tc.id,
+                    "content":      result_str[:1000],
                 })
 
         return _timeout_report(target), investigation_steps

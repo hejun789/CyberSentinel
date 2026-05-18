@@ -245,11 +245,8 @@ def _sanitize_error(raw: str) -> str:
     if "timeout" in msg.lower() or "timed out" in msg.lower() or "DeadlineExceeded" in msg:
         return "Request timed out. Please try again."
 
-    # Catch any other large/opaque SDK error blobs
-    if len(raw) > 200 or raw.lstrip().startswith("{"):
-        return "AI service returned an unexpected error. Please try again."
-
-    return raw
+    # Show first 300 chars of unknown errors so they can be diagnosed
+    return raw[:300]
 
 
 def _format_iocs_for_prompt(iocs: dict) -> str:
@@ -268,21 +265,36 @@ def _chat_with_ai(system: str, history: list, message: str) -> str:
     if PROVIDER == "groq":
         return _chat_groq(system, history, message)
     if PROVIDER == "openrouter":
-        return _chat_groq(system, history, message,
-                          api_key=OPENROUTER_API_KEY,
-                          base_url="https://openrouter.ai/api/v1")
+        return _chat_openrouter(system, history, message)
     if PROVIDER == "gemini":
         return _chat_gemini(system, history, message)
     raise RuntimeError("No provider")
 
 
-def _chat_groq(system: str, history: list, message: str,
-               api_key: str = None, base_url: str = None) -> str:
+def _chat_openrouter(system: str, history: list, message: str) -> str:
+    from openai import OpenAI
+    client = OpenAI(
+        api_key=OPENROUTER_API_KEY,
+        base_url="https://openrouter.ai/api/v1",
+        default_headers={
+            "HTTP-Referer": "https://cybersentinel-9d1d.onrender.com",
+            "X-Title": "CyberSentinel",
+        },
+    )
+    messages = [{"role": "system", "content": system}]
+    for turn in history:
+        role = turn.get("role")
+        content = turn.get("content", "")
+        if role in ("user", "assistant") and content:
+            messages.append({"role": role, "content": content})
+    messages.append({"role": "user", "content": message})
+    response = client.chat.completions.create(model=MODEL_ID, max_tokens=1024, messages=messages)
+    return response.choices[0].message.content.strip()
+
+
+def _chat_groq(system: str, history: list, message: str) -> str:
     from groq import Groq
-    kwargs = {"api_key": api_key or GROQ_API_KEY}
-    if base_url:
-        kwargs["base_url"] = base_url
-    client = Groq(**kwargs)
+    client = Groq(api_key=GROQ_API_KEY)
     messages = [{"role": "system", "content": system}]
     for turn in history:
         role = turn.get("role")
