@@ -22,7 +22,7 @@ elif GROQ_API_KEY:
     MODEL_ID  = "llama-3.1-8b-instant"
 elif OPENROUTER_API_KEY:
     PROVIDER = "openrouter"
-    MODEL_ID  = "mistralai/mistral-7b-instruct:free"
+    MODEL_ID  = "openrouter/owl-alpha"
 elif GEMINI_API_KEY:
     PROVIDER = "gemini"
     MODEL_ID  = "gemini-2.0-flash-lite"
