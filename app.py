@@ -224,8 +224,8 @@ def _sanitize_error(raw: str) -> str:
 
     if "rate_limit_exceeded" in msg or ("rate limit" in msg.lower() and "groq" in msg.lower()):
         m = _re.search(r"Please try again in (\d+\.?\d*)s", msg)
-        wait = f" Retry in {m.group(1)}s." if m else " Wait a moment and retry."
-        return f"Rate limit reached (Groq free tier: 6000 tokens/min).{wait}"
+        wait = f" Retry in {m.group(1)}s." if m else " Wait 60 seconds and retry."
+        return f"Rate limit reached (Groq free tier).{wait}"
 
     if "RESOURCE_EXHAUSTED" in msg or "quota" in msg.lower():
         m = _re.search(r"retryDelay['\": ]+(\d+)s", msg)

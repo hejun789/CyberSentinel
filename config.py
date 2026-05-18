@@ -18,7 +18,7 @@ if ANTHROPIC_API_KEY:
     MODEL_ID  = "claude-sonnet-4-6"
 elif GROQ_API_KEY:
     PROVIDER = "groq"
-    MODEL_ID  = "llama-3.3-70b-versatile"
+    MODEL_ID  = "llama-3.1-8b-instant"
 elif GEMINI_API_KEY:
     PROVIDER = "gemini"
     MODEL_ID  = "gemini-2.0-flash-lite"
