@@ -99,29 +99,50 @@ class _AnthropicAgent:
 
 
 # ─────────────────────────────────────────────────────────────────────────────
-# Gemini (Google) implementation
+# Gemini (Google) implementation  — uses new google-genai SDK
 # ─────────────────────────────────────────────────────────────────────────────
+
+def _to_gemini_schema(schema: dict) -> dict:
+    """Convert JSON Schema (lowercase types) to Gemini schema (uppercase types)."""
+    if not schema:
+        return {}
+    result = {}
+    if "type" in schema:
+        result["type"] = schema["type"].upper()
+    if "description" in schema:
+        result["description"] = schema["description"]
+    if "properties" in schema:
+        result["properties"] = {k: _to_gemini_schema(v) for k, v in schema["properties"].items()}
+    if "required" in schema:
+        result["required"] = schema["required"]
+    if "enum" in schema:
+        result["enum"] = schema["enum"]
+    if "items" in schema:
+        result["items"] = _to_gemini_schema(schema["items"])
+    return result
+
 
 class _GeminiAgent:
     def __init__(self):
-        import google.generativeai as genai
-        genai.configure(api_key=GEMINI_API_KEY)
-        self._genai = genai
+        from google import genai
+        from google.genai import types
 
-        # Convert Anthropic-style schemas → Gemini function declarations
+        self._client = genai.Client(api_key=GEMINI_API_KEY)
+        self._types  = types
+
+        # Build Gemini function declarations from Anthropic-style schemas
         declarations = [
-            {
-                "name": s["name"],
-                "description": s["description"],
-                "parameters": s["input_schema"],
-            }
+            types.FunctionDeclaration(
+                name=s["name"],
+                description=s["description"],
+                parameters=_to_gemini_schema(s["input_schema"]),
+            )
             for s in TOOL_SCHEMAS
         ]
-
-        self.model = genai.GenerativeModel(
-            model_name=MODEL_ID,
+        self._tool    = types.Tool(function_declarations=declarations)
+        self._chat_config = types.GenerateContentConfig(
+            tools=[self._tool],
             system_instruction=SYSTEM_PROMPT,
-            tools=[{"function_declarations": declarations}],
         )
 
     def investigate(
@@ -129,8 +150,8 @@ class _GeminiAgent:
         target: str,
         progress_callback: Optional[Callable[[dict], None]] = None
     ) -> tuple[str, list[dict]]:
-        genai = self._genai
-        chat = self.model.start_chat(history=[])
+        types = self._types
+        chat  = self._client.chats.create(model=MODEL_ID, config=self._chat_config)
         investigation_steps: list[dict] = []
 
         _emit(progress_callback, "start", f"Starting Gemini investigation of: {target}")
@@ -138,36 +159,32 @@ class _GeminiAgent:
         response = chat.send_message(_user_prompt(target))
 
         for iteration in range(MAX_ITERATIONS):
-            # Collect function calls from this response
-            fn_calls = [
-                part.function_call
-                for part in response.parts
-                if hasattr(part, "function_call") and part.function_call.name
-            ]
+            # Collect function calls from response parts
+            fn_calls = []
+            for part in response.candidates[0].content.parts:
+                if part.function_call and part.function_call.name:
+                    fn_calls.append(part.function_call)
 
             if not fn_calls:
-                # No tool calls → this is the final answer
-                try:
-                    final = response.text
-                except Exception:
-                    final = " ".join(
-                        part.text for part in response.parts if hasattr(part, "text")
-                    )
+                # No tool calls → extract final text
+                final = ""
+                for part in response.candidates[0].content.parts:
+                    if hasattr(part, "text") and part.text:
+                        final += part.text
                 _emit(progress_callback, "complete", "Investigation complete. Generating report...")
-                return final, investigation_steps
+                return final.strip(), investigation_steps
 
             _emit(progress_callback, "thinking",
                   f"Analyzing results, deciding next steps... (iteration {iteration + 1})")
 
             fn_response_parts = []
             for fn in fn_calls:
-                tool_name = fn.name
+                tool_name  = fn.name
                 tool_input = dict(fn.args)
 
                 result_str, snippet = _run_tool(tool_name, tool_input, progress_callback, iteration)
                 investigation_steps.append(_step(iteration, tool_name, tool_input, result_str, snippet))
 
-                # Parse result for Gemini FunctionResponse (must be a dict)
                 try:
                     result_dict = json.loads(result_str)
                     if not isinstance(result_dict, dict):
@@ -175,15 +192,10 @@ class _GeminiAgent:
                 except Exception:
                     result_dict = {"output": result_str}
 
-                # Strip None values — Gemini proto serializer rejects them
-                result_dict = _clean_none(result_dict)
-
                 fn_response_parts.append(
-                    genai.protos.Part(
-                        function_response=genai.protos.FunctionResponse(
-                            name=tool_name,
-                            response=result_dict,
-                        )
+                    types.Part.from_function_response(
+                        name=tool_name,
+                        response=_clean_none(result_dict),
                     )
                 )
 

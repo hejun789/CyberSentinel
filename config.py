@@ -17,7 +17,7 @@ if ANTHROPIC_API_KEY:
     MODEL_ID  = "claude-sonnet-4-6"
 elif GEMINI_API_KEY:
     PROVIDER = "gemini"
-    MODEL_ID  = "gemini-1.5-flash"
+    MODEL_ID  = "gemini-2.5-flash-lite"
 else:
     PROVIDER = None
     MODEL_ID  = None
