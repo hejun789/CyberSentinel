@@ -2,7 +2,7 @@
 
 import json
 
-from config import PROVIDER, MODEL_ID, GEMINI_API_KEY, ANTHROPIC_API_KEY
+from config import PROVIDER, MODEL_ID, GEMINI_API_KEY, ANTHROPIC_API_KEY, GROQ_API_KEY
 
 _IOC_KEYS = (
     "malicious_ips",
@@ -62,6 +62,8 @@ def extract_iocs(report_text: str, steps: list) -> dict:
     try:
         if PROVIDER == "anthropic":
             return _extract_anthropic(prompt)
+        if PROVIDER == "groq":
+            return _extract_groq(prompt)
         if PROVIDER == "gemini":
             return _extract_gemini(prompt)
     except Exception:
@@ -82,6 +84,21 @@ def _extract_anthropic(prompt: str) -> dict:
         messages=[{"role": "user", "content": prompt}],
     )
     text = response.content[0].text.strip()
+    return _normalize(_parse_json(text))
+
+
+def _extract_groq(prompt: str) -> dict:
+    from groq import Groq
+    client = Groq(api_key=GROQ_API_KEY)
+    response = client.chat.completions.create(
+        model=MODEL_ID,
+        max_tokens=1024,
+        messages=[
+            {"role": "system", "content": _SYSTEM},
+            {"role": "user",   "content": prompt},
+        ],
+    )
+    text = response.choices[0].message.content.strip()
     return _normalize(_parse_json(text))
 
 
