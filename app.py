@@ -202,4 +202,4 @@ if __name__ == "__main__":
     if not ANTHROPIC_API_KEY:
         print("  ⚠  Add your Anthropic API key to .env before investigating targets")
         print("  Get a key at: https://console.anthropic.com\n")
-    app.run(debug=FLASK_DEBUG, port=FLASK_PORT, threaded=True)
+    app.run(host="0.0.0.0", debug=FLASK_DEBUG, port=FLASK_PORT, threaded=True)
