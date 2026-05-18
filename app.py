@@ -47,11 +47,25 @@ def _save_history_entry(entry: dict) -> None:
 
 
 def _get_investigation(inv_id: str) -> dict | None:
-    """Return the full history entry for a given ID, or None if not found."""
     for entry in _load_history():
         if entry.get("id") == inv_id:
             return entry
     return None
+
+
+def _append_chat_to_history(inv_id: str, user_msg: str, assistant_reply: str) -> None:
+    with _history_lock:
+        history = _load_history()
+        for entry in history:
+            if entry.get("id") == inv_id:
+                if "chat_history" not in entry:
+                    entry["chat_history"] = []
+                entry["chat_history"].append({"role": "user",      "content": user_msg})
+                entry["chat_history"].append({"role": "assistant", "content": assistant_reply})
+                break
+        os.makedirs(os.path.dirname(HISTORY_FILE), exist_ok=True)
+        with open(HISTORY_FILE, "w", encoding="utf-8") as f:
+            json.dump(history, f, indent=2, ensure_ascii=False)
 
 
 # ─── Routes ───────────────────────────────────────────────────────────────────
@@ -196,6 +210,8 @@ def chat():
 
     try:
         reply = _chat_with_ai(system, history, message)
+        if inv_id:
+            _append_chat_to_history(inv_id, message, reply)
         return jsonify({"reply": reply})
     except Exception as exc:
         return jsonify({"error": _sanitize_error(str(exc))}), 500
@@ -323,7 +339,7 @@ def get_history():
     history = _load_history()
     # Strip raw_report from list view to keep response small
     slim = [
-        {k: v for k, v in h.items() if k != "raw_report"}
+        {k: v for k, v in h.items() if k not in ("raw_report", "chat_history")}
         for h in history
     ]
     return jsonify({"history": slim, "count": len(slim)})

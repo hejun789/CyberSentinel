@@ -560,28 +560,33 @@ function renderHistory(history) {
 async function loadHistoryEntry(id) {
   try {
     const resp = await fetch(`/api/investigation/${id}`);
-    if (!resp.ok) {
-      window.scrollTo({ top: 0, behavior: 'smooth' });
-      return;
-    }
+    if (!resp.ok) { window.scrollTo({ top: 0, behavior: 'smooth' }); return; }
     const entry = await resp.json();
 
     currentInvId = entry.id;
-    chatHistory  = [];
 
-    // Show chat panel and IOCs for past investigations
     if (entry.iocs) renderIocs(entry.iocs);
-    showChatPanel();
 
-    // Scroll to chat panel
-    chatPanel.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    // Show panel and clear messages
+    chatPanel.classList.remove('hidden');
+    chatMessages.innerHTML = '';
+    chatInput.value = '';
 
-    // Show a quick summary in chat
-    if (entry.executive_summary) {
-      const summary = `[Loaded from history] Target: ${entry.target}\nThreat Level: ${entry.threat_level}\n${entry.executive_summary}`;
-      appendChatBubble('assistant', summary);
-      chatHistory.push({ role: 'assistant', content: summary });
+    // Restore saved chat history if it exists
+    if (entry.chat_history && entry.chat_history.length > 0) {
+      chatHistory = [...entry.chat_history];
+      chatHistory.forEach(turn => appendChatBubble(turn.role, turn.content));
+    } else {
+      // No saved chat yet — show a summary prompt
+      chatHistory = [];
+      if (entry.executive_summary) {
+        const summary = `[Loaded from history] Target: ${entry.target}\nThreat Level: ${entry.threat_level}\n${entry.executive_summary}`;
+        appendChatBubble('assistant', summary);
+        chatHistory.push({ role: 'assistant', content: summary });
+      }
     }
+
+    chatPanel.scrollIntoView({ behavior: 'smooth', block: 'start' });
   } catch {
     window.scrollTo({ top: 0, behavior: 'smooth' });
   }
