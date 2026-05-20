@@ -309,7 +309,11 @@ CyberSentinel/
 
 ## Screenshots
 
-> *Add screenshots of the dark UI, investigation feed, report card, IOC grid, and chat panel here*
+<img width="1915" height="905" alt="Screenshot 2026-05-08 111048" src="https://github.com/user-attachments/assets/352f55be-a3b4-46ac-87c7-48f8b83e8d8d" />
+<img width="1918" height="911" alt="Screenshot 2026-05-08 111106" src="https://github.com/user-attachments/assets/a551033d-d181-41c5-94aa-65e08e2463a7" />
+<img width="1918" height="902" alt="Screenshot 2026-05-08 111117" src="https://github.com/user-attachments/assets/93793fad-6feb-4074-83ce-2a2dae5ed34b" />
+<img width="1912" height="907" alt="Screenshot 2026-05-08 111144" src="https://github.com/user-attachments/assets/ae6bfe6c-4ce2-4f3a-a2b7-e95d910cde06" />
+
 
 ---
 
